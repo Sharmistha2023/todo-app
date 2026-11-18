@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Todo List</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: #f6f7f9;
+    color: #1c1e21;
+    display: flex;
+    justify-content: center;
+    padding: 2rem 1rem 4rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #14161a; color: #e6e8eb; }
+  }
+  main { width: 100%; max-width: 34rem; }
+  h1 { margin: 0 0 1rem; font-size: 1.6rem; }
+  .add-row { display: flex; gap: .5rem; margin-bottom: 1.25rem; }
+  #task-input {
+    flex: 1;
+    padding: .6rem .75rem;
+    font-size: 1rem;
+    border: 1px solid #c7ccd4;
+    border-radius: 8px;
+    background: #fff;
+    color: inherit;
+  }
+  @media (prefers-color-scheme: dark) {
+    #task-input { background: #1f232a; border-color: #3a4150; }
+  }
+  button {
+    padding: .6rem .9rem;
+    font-size: .95rem;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: #2563eb;
+    color: #fff;
+    cursor: pointer;
+  }
+  button:hover { filter: brightness(1.1); }
+  .small {
+    padding: .3rem .6rem;
+    font-size: .85rem;
+    background: transparent;
+    color: inherit;
+    border: 1px solid #c7ccd4;
+  }
+  @media (prefers-color-scheme: dark) { .small { border-color: #3a4150; } }
+  .small.danger { color: #dc2626; border-color: currentColor; }
+  #tasks { list-style: none; margin: 0; padding: 0; }
+  #tasks li {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .65rem .75rem;
+    margin-bottom: .5rem;
+    background: #fff;
+    border: 1px solid #e3e6ea;
+    border-radius: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    #tasks li { background: #1f232a; border-color: #2c313b; }
+  }
+  #tasks input[type="checkbox"] { width: 1.1rem; height: 1.1rem; flex: none; }
+  .task-title { flex: 1; word-break: break-word; }
+  .task-title.done { text-decoration: line-through; opacity: .55; }
+  .edit-input {
+    flex: 1;
+    padding: .35rem .5rem;
+    font-size: .95rem;
+    border: 1px solid #2563eb;
+    border-radius: 6px;
+    background: #fff;
+    color: inherit;
+  }
+  @media (prefers-color-scheme: dark) { .edit-input { background: #14161a; } }
+  .msg { min-height: 1.4rem; margin: 0 0 .75rem; font-size: .9rem; color: #dc2626; }
+  .empty { color: #6b7280; padding: .5rem .25rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Todo List</h1>
+  <form id="add-form" class="add-row">
+    <input id="task-input" type="text" placeholder="What needs doing?" maxlength="200" autocomplete="off">
+    <button type="submit">Add</button>
+  </form>
+  <p id="msg" class="msg" role="alert"></p>
+  <ul id="tasks"></ul>
+  <p id="empty" class="empty" hidden>No tasks yet. Add one above.</p>
+</main>
+<script>
+(function () {
+  const form = document.getElementById("add-form");
+  const input = document.getElementById("task-input");
+  const list = document.getElementById("tasks");
+  const empty = document.getElementById("empty");
+  const msg = document.getElementById("msg");
+  let msgTimer = null;
+
+  function showMsg(text) {
+    msg.textContent = text || "";
+    if (text) {
+      clearTimeout(msgTimer);
+      msgTimer = setTimeout(() => { msg.textContent = ""; }, 4000);
+    }
+  }
+
+  async function api(path, options) {
+    let res;
+    try {
+      res = await fetch(path, options);
+    } catch (e) {
+      throw new Error("Something went wrong. Please try again.");
+    }
+    let body = null;
+    try { body = await res.json(); } catch (e) {}
+    if (!res.ok || !body || body.ok === false) {
+      throw new Error((body && body.error) || "Something went wrong. Please try again.");
+    }
+    return body.data;
+  }
+
+  function taskEl(task) {
+    const li = document.createElement("li");
+    li.dataset.id = task.id;
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = task.done;
+    cb.addEventListener("change", () => toggle(task.id, cb.checked));
+
+    const span = document.createElement("span");
+    span.className = "task-title" + (task.done ? " done" : "");
+    span.textContent = task.title;
+
+    const edit = document.createElement("button");
+    edit.className = "small";
+    edit.textContent = "Edit";
+    edit.addEventListener("click", () => startEdit(li, task));
+
+    const del = document.createElement("button");
+    del.className = "small danger";
+    del.textContent = "Delete";
+    del.addEventListener("click", () => remove(task.id));
+
+    li.append(cb, span, edit, del);
+    return li;
+  }
+
+  async function render() {
+    const tasks = await api("api/tasks");
+    list.innerHTML = "";
+    for (const t of tasks) list.appendChild(taskEl(t));
+    empty.hidden = tasks.length > 0;
+  }
+
+  async function add(e) {
+    e.preventDefault();
+    const title = input.value.trim();
+    if (!title) { showMsg("Task title cannot be empty."); return; }
+    try {
+      await api("api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      input.value = "";
+      showMsg("");
+      await render();
+    } catch (err) { showMsg(err.message); }
+  }
+
+  async function toggle(id, done) {
+    try {
+      await api("api/tasks/" + id, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ done }),
+      });
+      await render();
+    } catch (err) { showMsg(err.message); await render(); }
+  }
+
+  async function remove(id) {
+    if (!confirm("Delete this task?")) return;
+    try {
+      await api("api/tasks/" + id, { method: "DELETE" });
+      await render();
+    } catch (err) { showMsg(err.message); }
+  }
+
+  function startEdit(li, task) {
+    if (li.querySelector(".edit-input")) return;
+    const span = li.querySelector(".task-title");
+    const editBtn = li.querySelector(".small:not(.danger)");
+    const delBtn = li.querySelector(".small.danger");
+    editBtn.style.display = "none";
+    delBtn.style.display = "none";
+    span.remove();
+
+    const field = document.createElement("input");
+    field.className = "edit-input";
+    field.type = "text";
+    field.value = task.title;
+    field.maxLength = 200;
+
+    const save = async () => {
+      const title = field.value.trim();
+      if (!title) { showMsg("Task title cannot be empty."); return; }
+      try {
+        await api("api/tasks/" + task.id, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        });
+        await render();
+      } catch (err) { showMsg(err.message); }
+    };
+
+    field.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); save(); }
+      if (e.key === "Escape") render();
+    });
+
+    const doneBtn = document.createElement("button");
+    doneBtn.className = "small";
+    doneBtn.textContent = "Save";
+    doneBtn.addEventListener("click", save);
+
+    li.insertBefore(field, editBtn);
+    li.insertBefore(doneBtn, editBtn);
+    field.focus();
+    field.select();
+  }
+
+  form.addEventListener("submit", add);
+  render().catch((err) => showMsg(err.message));
+})();
+</script>
+</body>
+</html>

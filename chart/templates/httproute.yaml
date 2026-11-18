@@ -1,0 +1,20 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "todo-app.fullname" . }}
+  labels:
+    {{- include "todo-app.labels" . | nindent 4 }}
+  annotations:
+    dkubex.io/middleware: cookie-auth
+spec:
+  parentRefs:
+    - name: traefik-gateway
+      namespace: dkubex
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ include "todo-app.basePath" . }}
+      backendRefs:
+        - name: {{ include "todo-app.fullname" . }}
+          port: {{ .Values.service.port }}

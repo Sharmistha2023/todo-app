@@ -1,0 +1,29 @@
+apiVersion: v2
+name: todo-app
+description: A simple todo list app backed by PostgreSQL
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+annotations:
+  dkubex: |
+    icon: https://raw.githubusercontent.com/Sharmistha2023/todo-app/main/icon.svg
+    docs: https://github.com/Sharmistha2023/todo-app#readme
+    description: A simple todo list backed by PostgreSQL
+    categories:
+      - Developer Tools
+    roles:
+      - user
+    dependencies:
+      - postgres
+    images:
+      - ghcr.io/sharmistha2023/todo-app:0.1.0
+    resources:
+      cpu:
+        min: 100m
+        recommended: 250m
+      memory:
+        min: 128Mi
+        recommended: 256Mi
+    routing:
+      type: basepath
