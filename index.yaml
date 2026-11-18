@@ -13,6 +13,38 @@ entries:
         dependencies:
           - postgres
         images:
+          - ghcr.io/sharmistha2023/todo-app:0.1.1
+        resources:
+          cpu:
+            min: 100m
+            recommended: 250m
+          memory:
+            min: 128Mi
+            recommended: 256Mi
+        routing:
+          type: basepath
+    apiVersion: v2
+    appVersion: 0.1.1
+    created: "2026-11-18T07:16:17.942830827Z"
+    description: A simple todo list app backed by PostgreSQL
+    digest: f146303c4e5371a56db024a3dc4b5565d5487685eedbfb76e14fb9d8f82bd0fe
+    name: todo-app
+    type: application
+    urls:
+    - https://sharmistha2023.github.io/todo-app/todo-app-0.1.1.tgz
+    version: 0.1.1
+  - annotations:
+      dkubex: |
+        icon: https://raw.githubusercontent.com/Sharmistha2023/todo-app/main/icon.svg
+        docs: https://github.com/Sharmistha2023/todo-app#readme
+        description: A simple todo list backed by PostgreSQL
+        categories:
+          - Developer Tools
+        roles:
+          - user
+        dependencies:
+          - postgres
+        images:
           - ghcr.io/sharmistha2023/todo-app:0.1.0
         resources:
           cpu:
@@ -25,7 +57,7 @@ entries:
           type: basepath
     apiVersion: v2
     appVersion: 0.1.0
-    created: "2026-11-18T06:38:08.44754755Z"
+    created: "2026-11-18T07:16:17.941353532Z"
     description: A simple todo list app backed by PostgreSQL
     digest: 77c87fa33435549a2c881caf7762556d5c14bb6780659975fe85e93d98819002
     name: todo-app
@@ -33,4 +65,4 @@ entries:
     urls:
     - https://sharmistha2023.github.io/todo-app/todo-app-0.1.0.tgz
     version: 0.1.0
-generated: "2026-11-18T06:38:08.445681661Z"
+generated: "2026-11-18T07:16:17.939557183Z"
