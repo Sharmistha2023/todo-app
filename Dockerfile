@@ -20,6 +20,5 @@ USER appuser
 
 EXPOSE 8080
 
-# PORT is injected by the chart (matches service.port); DKUBEX_BASE_PATH is the routing
-# prefix the chart sets, passed through as root-path so generated URLs carry it.
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port \"${PORT}\" --root-path \"${DKUBEX_BASE_PATH:-}\""]
+# PORT is injected by the chart; DKUBEX_BASE_PATH is used by main.py to mount routes.
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port \"${PORT}\""]

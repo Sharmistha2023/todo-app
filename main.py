@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 
 import psycopg
 import psycopg.rows as rows
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 
 DB_URL = os.environ.get(
@@ -22,8 +22,7 @@ MAX_TITLE = 200
 
 
 def auth_header(request: Request) -> str | None:
-    # The gateway (cookie-auth middleware) sets this after SSO. Local runs (no DKubeX)
-    # have no gateway in front, so we only enforce it when deployed as a platform app.
+    """Return the authenticated username from the gateway, or 'local' for dev runs."""
     if BASE_PATH:
         return request.headers.get("X-Auth-Request-User")
     return "local"
@@ -32,7 +31,6 @@ def auth_header(request: Request) -> str | None:
 def require_user(request: Request) -> str:
     user = auth_header(request)
     if not user:
-        # 401 with no login redirect — the platform's reverse proxy owns the login.
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
 
@@ -55,6 +53,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Todo List", lifespan=lifespan)
 
+# Create a router for all routes; we'll mount it at BASE_PATH (or "/" for local dev)
+router = APIRouter()
+
 
 def db():
     return psycopg.connect(DB_URL, row_factory=rows.dict_row)
@@ -75,7 +76,7 @@ def get_task(task_id: int) -> dict | None:
             return cur.fetchone()
 
 
-@app.get("/health")
+@router.get("/health")
 def health():
     try:
         with db() as conn:
@@ -85,87 +86,103 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/")
+@router.get("/")
 def index():
     return FileResponse(os.path.join(os.path.dirname(__file__), "static", "index.html"))
 
 
-@app.get("/api/tasks")
+@router.get("/api/tasks")
 def list_tasks(request: Request):
     require_user(request)
     try:
         with db() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT id, title, done FROM tasks ORDER BY created_at DESC, id DESC")
-                rows = cur.fetchall()
-    except Exception:
-        return err("Something went wrong. Please try again.")
-    return ok([dict(r) for r in rows])
+                tasks = cur.fetchall()
+        return ok(tasks)
+    except Exception as e:
+        return err(f"Database error: {e}", 500)
 
 
-@app.post("/api/tasks")
-async def add_task(request: Request):
+@router.post("/api/tasks", status_code=201)
+def create_task(request: Request, body: dict):
     require_user(request)
-    try:
-        body = await request.json()
-    except Exception:
-        return err("Task title cannot be empty.")
     title = (body.get("title") or "").strip()
     if not title:
-        return err("Task title cannot be empty.")
+        return err("Title is required")
     if len(title) > MAX_TITLE:
-        return err(f"Task title must be {MAX_TITLE} characters or fewer.")
-    try:
-        with db() as conn:
-            with conn.cursor() as cur:
-                cur.execute("INSERT INTO tasks (title) VALUES (%s) RETURNING id, title, done", (title,))
-                row = cur.fetchone()
-    except Exception:
-        return err("Something went wrong. Please try again.")
-    return ok(dict(row))
-
-
-@app.put("/api/tasks/{task_id}")
-async def update_task(task_id: int, request: Request):
-    require_user(request)
-    try:
-        body = await request.json()
-    except Exception:
-        return err("Invalid request. Please try again.")
-    existing = get_task(task_id)
-    if existing is None:
-        return err("Task not found.", 404)
-    if "title" in body:
-        title = (body["title"] or "").strip()
-        if not title:
-            return err("Task title cannot be empty.")
-        if len(title) > MAX_TITLE:
-            return err(f"Task title must be {MAX_TITLE} characters or fewer.")
-        existing["title"] = title
-    if "done" in body:
-        existing["done"] = bool(body["done"])
+        return err(f"Title must be at most {MAX_TITLE} characters")
     try:
         with db() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "UPDATE tasks SET title = %s, done = %s WHERE id = %s",
-                    (existing["title"], existing["done"], task_id),
+                    "INSERT INTO tasks (title) VALUES (%s) RETURNING id, title, done",
+                    (title,),
                 )
-    except Exception:
-        return err("Something went wrong. Please try again.")
-    return ok({"id": task_id, "title": existing["title"], "done": existing["done"]})
+                task = cur.fetchone()
+        return ok(task)
+    except Exception as e:
+        return err(f"Database error: {e}", 500)
 
 
-@app.delete("/api/tasks/{task_id}")
-def delete_task(task_id: int, request: Request):
+@router.put("/api/tasks/{task_id}")
+def update_task(request: Request, task_id: int, body: dict):
     require_user(request)
-    existing = get_task(task_id)
-    if existing is None:
-        return err("Task not found.", 404)
+    task = get_task(task_id)
+    if not task:
+        return err("Task not found", 404)
+
+    title = body.get("title")
+    done = body.get("done")
+
+    if title is not None:
+        title = title.strip()
+        if not title:
+            return err("Title cannot be empty")
+        if len(title) > MAX_TITLE:
+            return err(f"Title must be at most {MAX_TITLE} characters")
+
     try:
         with db() as conn:
             with conn.cursor() as cur:
-                cur.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
-    except Exception:
-        return err("Something went wrong. Please try again.")
-    return ok({"deleted": task_id})
+                if title is not None and done is not None:
+                    cur.execute(
+                        "UPDATE tasks SET title = %s, done = %s WHERE id = %s RETURNING id, title, done",
+                        (title, done, task_id),
+                    )
+                elif title is not None:
+                    cur.execute(
+                        "UPDATE tasks SET title = %s WHERE id = %s RETURNING id, title, done",
+                        (title, task_id),
+                    )
+                elif done is not None:
+                    cur.execute(
+                        "UPDATE tasks SET done = %s WHERE id = %s RETURNING id, title, done",
+                        (done, task_id),
+                    )
+                else:
+                    return ok(task)
+                updated = cur.fetchone()
+        return ok(updated)
+    except Exception as e:
+        return err(f"Database error: {e}", 500)
+
+
+@router.delete("/api/tasks/{task_id}")
+def delete_task(request: Request, task_id: int):
+    require_user(request)
+    task = get_task(task_id)
+    if not task:
+        return err("Task not found", 404)
+    try:
+        with db() as conn:
+            conn.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
+        return ok({"deleted": task_id})
+    except Exception as e:
+        return err(f"Database error: {e}", 500)
+
+
+# Mount router at BASE_PATH (gateway forwards full path, so app must match it)
+# For local dev (no BASE_PATH), mount at root
+mount_path = BASE_PATH if BASE_PATH else ""
+app.include_router(router, prefix=mount_path)

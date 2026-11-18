@@ -1,0 +1,11 @@
+INFO:     Started server process [3132]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:20000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:58408 - "GET /workspace/sharmistha/todo-app/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:0 - "GET /workspace/sharmistha/todo-app/workspace/sharmistha/todo-app/ HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:0 - "GET /workspace/sharmistha/todo-app/workspace/sharmistha/todo-app/ HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58442 - "GET /workspace/sharmistha/todo-app/api/tasks HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:58458 - "GET /workspace/sharmistha/todo-app/api/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58472 - "GET /workspace/sharmistha/todo-app/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:0 - "GET /workspace/sharmistha/todo-app/workspace/sharmistha/todo-app/ HTTP/1.1" 404 Not Found
